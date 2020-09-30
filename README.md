@@ -1,6 +1,6 @@
 # Neurally-Augmented ALISTA
 
-Code to reproduce the results from [referende to paper](the-link-to-the-publication).
+Code to reproduce the results from [reference to paper](the-link-to-the-publication).
 created by Jonathan Sauder, Freya Behrens, Peter Jung
 ### Getting started
 
