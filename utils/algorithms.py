@@ -104,7 +104,7 @@ class ALISTA(nn.Module):
         torch.save(self.state_dict(), name)
 
     def load(self, name):
-        self.load_state_dict(torch.load(name))
+        self.load_state_dict(torch.load(name, map_location=device))
 
 
 def soft_threshold_vector(x, theta, p):
@@ -177,7 +177,7 @@ class NA_ALISTA(nn.Module):
         torch.save(self.state_dict(), name)
 
     def load(self, name):
-        self.load_state_dict(torch.load(name))
+        self.load_state_dict(torch.load(name, map_location=device))
 
 
 class NormLSTMC(nn.Module):
@@ -335,7 +335,7 @@ class ALISTA_AT(nn.Module):
         torch.save(self.state_dict(), name)
 
     def load(self, name):
-        self.load_state_dict(torch.load(name))
+        self.load_state_dict(torch.load(name, map_location=device))
 
 
 class AGLISTA(nn.Module):
@@ -385,4 +385,4 @@ class AGLISTA(nn.Module):
         torch.save(self.state_dict(), name)
 
     def load(self, name):
-        self.load_state_dict(torch.load(name))
+        self.load_state_dict(torch.load(name, map_location=device))
