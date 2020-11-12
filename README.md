@@ -1,7 +1,7 @@
 # Neurally-Augmented ALISTA
 
 Code to reproduce the results from [reference to paper](the-link-to-the-publication).
-created by XXXXXXXX.
+created by Freya Behrens, Jonathan Sauder, Peter Jung.
 ### Getting started
 
 Running the experiments:
