@@ -2,11 +2,11 @@ import torch
 import numpy as np
 import torch.nn as nn
 from utils.optimize_matrices import generalized_coherence
+import utils.conf as conf
 
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
+device = conf.device
+
+
 
 
 def soft_threshold(x, theta, p):
