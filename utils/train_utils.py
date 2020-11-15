@@ -22,12 +22,21 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
         return None
 
     phi, W_frob = get_matrices(m, n, matrix_dir=matrix_dir)
+
+    L = np.max(np.linalg.eigvals(np.dot(phi, phi.T)).astype(np.float32))
+    phi = torch.Tensor(phi).to(device)
+    W_frob = torch.Tensor(phi).to(device)
+    forward_op = lambda x: torch.matmul(phi, x.T).T
+    backward_op = lambda x: torch.matmul(W_frob.T, x.T).T
+
     data = Synthetic(m, n, s, s)
     # put W_frob = reverse tv norm operator ...
-    model = model_fn(m, n, s, k, p, phi, W_frob=W_frob, ).to(device)
+    model = model_fn(m, n, s, k, p, forward_op, backward_op, L).to(device)
 
     if type(model) not in [ISTA, FISTA]:
         opt = torch.optim.Adam(model.parameters(), lr=initial_lr)
+    else:
+        model.backward_op = lambda x: torch.matmul(phi.T, x.T).T
 
     train_losses = []
     train_dbs = []
@@ -76,7 +85,7 @@ def train_one_epoch(model, loader, noise_fn, opt):
         X = X.to(device)
         info = info.to(device)
         opt.zero_grad()
-        y = torch.matmul(X, model.phi.T)
+        y = model.forward_op(X)
         X_hat, gammas, thetas = model(noise_fn(y), info)
         loss = ((X_hat - X) ** 2).mean()
         loss.backward()
@@ -94,7 +103,7 @@ def test_one_epoch(model, loader, noise_fn):
         for i, (X, info) in enumerate(loader):
             X = X.to(device)
             info = info.to(device)
-            y = torch.matmul(X, model.phi.T)
+            y = model.forward_op(X)
             X_hat, gammas, thetas = model(noise_fn(y), info)
             test_loss += ((X_hat - X) ** 2).mean().item()
             test_normalizer += (X ** 2).mean().item()
@@ -117,7 +126,7 @@ def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/model
                 sparsities.extend(list((X != 0).int().sum(dim=1).detach().numpy()))
                 X = X.to(device)
                 info = info.to(device)
-                y = torch.matmul(X, model.phi.T)
+                y = model.forward_op(X)
                 X_hat, gammas, thetas = model(noise_fn(y), info)
                 test_loss.extend(list(((X_hat - X) ** 2).cpu().detach().numpy()))
                 test_normalizer.extend(list((X ** 2).cpu().detach().numpy()))
