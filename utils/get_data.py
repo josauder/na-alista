@@ -2,10 +2,9 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import torch
 
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
+import utils.conf as conf
+
+device = conf.device
 
 
 class BernoulliSyntheticDataset(Dataset):

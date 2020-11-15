@@ -6,11 +6,11 @@ import os
 import pandas as pd
 from utils.get_data import Synthetic
 from utils.algorithms import ISTA, FISTA
+from time import time
 
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
+import utils.conf as conf
+
+device = conf.device
 
 
 def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, model_dir='res/models/',matrix_dir='res/matrices/'):
@@ -23,6 +23,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
 
     phi, W_frob = get_matrices(m, n, matrix_dir=matrix_dir)
     data = Synthetic(m, n, s, s)
+    # put W_frob = reverse tv norm operator ...
     model = model_fn(m, n, s, k, p, phi, W_frob=W_frob, ).to(device)
 
     if type(model) not in [ISTA, FISTA]:
@@ -109,6 +110,7 @@ def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/model
     test_loss = []
     test_normalizer = []
     sparsities = []
+    t1 = time()
     with torch.no_grad():
         for epoch in range(1):
             for i, (X, info) in enumerate(data.train_loader):
@@ -120,6 +122,8 @@ def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/model
                 test_loss.extend(list(((X_hat - X) ** 2).cpu().detach().numpy()))
                 test_normalizer.extend(list((X ** 2).cpu().detach().numpy()))
             data.train_data.reset()
+    t2 = time()
+    runtime_evaluation = t2 - t1
 
     test_loss = np.array(test_loss)
     test_normalizer = np.array(test_normalizer)
