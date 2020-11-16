@@ -30,7 +30,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
 
     L = np.max(np.linalg.eigvals(np.dot(phi, phi.T)).astype(np.float32))
     phi = torch.Tensor(phi).to(device)
-    W_frob = torch.Tensor(phi).to(device)
+    W_frob = torch.Tensor(W_frob).to(device)
     forward_op = lambda x: torch.matmul(phi, x.T).T
     backward_op = lambda x: torch.matmul(W_frob.T, x.T).T
 
@@ -171,7 +171,7 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
     train_loss = 0
     train_normalizer = 0
     for i, (X, info) in enumerate(loader):
-        X = X.to(device) / 10
+        X = X.to(device)
 
         if transform is not None:
             import matplotlib.pyplot as plt
