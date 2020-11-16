@@ -1,6 +1,6 @@
-from utils.noise import GaussianNoise
 from utils.train_utils import *
 from utils.all_models import *
+from utils.noise import GaussianNoise
 
 import torch
 
@@ -37,20 +37,25 @@ will be approximately one hour (400 epochs).
 model_dir = 'res/models/'
 
 # Default settings for reproducing our experiments.
-m = 50  # measurements
-s = 10  # sparsity
+m = 250  # measurements
+s = 49  # sparsity
 lr = 0.2 * 10e-4  # learning rate
 
 for model_func in [#NA_ALISTA_UR_128, ALISTA_AT, ALISTA, FISTA, ISTA,
-    AGLISTA, NA_ALISTA_U_128, NA_ALISTA_R_128]:
+    FISTA, ISTA,
+    ALISTA,
+    AGLISTA,
+    ALISTA_AT,
+    NA_ALISTA_U_128,
+    NA_ALISTA_R_128]:
 
-    for k in [10]: # number of iterations that the ISTA-style method is executed
+    for k in [16]: # number of iterations that the ISTA-style method is executed
 
-        epoch = 10
+        epoch = 40
 
-        for n in [100]: # input size
+        for n in [500]: # input size
 
-            for noisename, noisefn in [["GaussianNoise40", GaussianNoise(40)]]:
+            for noisename, noisefn in [["GaussianNoise40", GaussianNoise(40)], ["Noiseless", lambda x: x]]:
 
                 # apply the p-trick
                 p = (np.linspace((s * 1 * 1.2) // k, s * 1 * 1.2, k)).astype(int)

@@ -10,7 +10,7 @@ from time import time
 from utils.wavelet import WT
 from utils.fft import fft2, ifft2
 import utils.conf as conf
-from torchvision.transforms import Grayscale, ToTensor, Compose, RandomVerticalFlip, RandomHorizontalFlip, Resize
+from torchvision.transforms import Grayscale, ToTensor, Compose, RandomVerticalFlip, RandomHorizontalFlip, Resize, RandomAffine, CenterCrop, RandomResizedCrop
 from torchvision import datasets
 from torch.utils.data import DataLoader
 from utils.algorithms import soft_threshold
@@ -35,9 +35,8 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     backward_op = lambda x: torch.matmul(W_frob.T, x.T).T
 
     data = Synthetic(m, n, s, s)
-    prox = soft_threshold
     # put W_frob = reverse tv norm operator ...
-    model = model_fn(m, n, s, k, p, forward_op, backward_op, prox, L).to(device)
+    model = model_fn(m, n, s, k, p, forward_op, backward_op, L).to(device)
 
     if type(model) not in [ISTA, FISTA]:
         opt = torch.optim.Adam(model.parameters(), lr=initial_lr)
@@ -104,19 +103,27 @@ def train_model2(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mo
     forward_op = lambda x: P_omega * fft2(wavelet.iwt(x))
     backward_op = lambda x: wavelet.wt(ifft2(P_omega.T * x))
 
-    prox = soft_threshold
 
-    train_transform = Compose([Grayscale(),
-                               RandomHorizontalFlip(), RandomVerticalFlip(), ToTensor()])
-    train_dataset = datasets.CIFAR100('.', train=True, transform=train_transform, target_transform=None, download=True)
-    test_transform = Compose([Grayscale(), ToTensor()])
-    test_dataset = datasets.CIFAR100('.', train=False, transform=test_transform, target_transform=None, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+    train_transform = Compose([Grayscale(),  RandomAffine((0, 0), translate=(0, 0.1), scale=(0.8, 1.2)),
+                               RandomResizedCrop((32, 32), scale=(1.0, 1.0)), RandomHorizontalFlip(), RandomVerticalFlip(), ToTensor()])
+    #train_dataset = datasets.CIFAR100('.', train=True, transform=train_transform, target_transform=None, download=True)
+
+    #for i in os.listdir('realdata/yes'):
+    #    os.system("mv realdata/yes/" + str(i.replace(" ", "\\ ")) + " realdata/yes/" + str(i.replace(" ", "").lower()))
+    #for i in os.listdir('realdata/no'):
+    #    os.system("mv realdata/no/" + str(i.replace(" ", "\\ ")) + " realdata/no/" + str(i.replace(" ", "").lower()))
+
+    train_dataset = datasets.ImageFolder('realdata/train', transform=train_transform)
+    test_transform = Compose([Resize(32), CenterCrop(32), Grayscale(), ToTensor()])
+    test_dataset = datasets.ImageFolder('realdata/test', transform=test_transform)
+    #test_dataset = datasets.CIFAR100('.', train=False, transform=test_transform, target_transform=None, download=True)
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+
 
     n = 32 * 32
 
-    model = model_fn(m, n, s, k, p, forward_op, backward_op, prox, L).to(device)
+    model = model_fn(m, n, s, k, p, forward_op, backward_op, L).to(device)
 
     if type(model) not in [ISTA, FISTA]:
         opt = torch.optim.Adam(model.parameters(), lr=initial_lr)
@@ -134,7 +141,7 @@ def train_model2(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mo
         else:
             train_loss = 0
             train_db = 0
-        test_loss, test_db = test_one_epoch(model, test_loader, noise_fn)
+        test_loss, test_db = test_one_epoch(model, test_loader, noise_fn, transform=wavelet)
 
         train_losses.append(train_loss)
         test_losses.append(test_loss)
@@ -164,7 +171,7 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
     train_loss = 0
     train_normalizer = 0
     for i, (X, info) in enumerate(loader):
-        X = X.to(device)
+        X = X.to(device) / 10
 
         if transform is not None:
             import matplotlib.pyplot as plt
@@ -194,12 +201,14 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
     return train_loss / len(loader), 10 * np.log10(train_loss / train_normalizer)
 
 
-def test_one_epoch(model, loader, noise_fn):
+def test_one_epoch(model, loader, noise_fn, transform=None):
     test_loss = 0
     test_normalizer = 0
     with torch.no_grad():
         for i, (X, info) in enumerate(loader):
             X = X.to(device)
+            if transform is not None:
+                X = transform.wt(X)
             info = info.to(device)
             y = model.forward_op(X)
             X_hat, gammas, thetas = model(noise_fn(y), info)
@@ -208,7 +217,7 @@ def test_one_epoch(model, loader, noise_fn):
     return test_loss / len(loader), 10 * np.log10(test_loss / test_normalizer)
 
 
-def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/models/'):
+def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/models/', transform=None):
     phi, W_soft_gen, W_frob = get_matrices(m, n)
     data = Synthetic(m, n, s, s)
     model = model_fn(m, n, s, k, p, phi, W_soft_gen, W_frob).to(device)
@@ -223,6 +232,7 @@ def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/model
             for i, (X, info) in enumerate(data.train_loader):
                 sparsities.extend(list((X != 0).int().sum(dim=1).detach().numpy()))
                 X = X.to(device)
+
                 info = info.to(device)
                 y = model.forward_op(X)
                 X_hat, gammas, thetas = model(noise_fn(y), info)
