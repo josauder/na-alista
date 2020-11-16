@@ -10,28 +10,19 @@ device = conf.device
 
 
 def soft_threshold(x, theta, p):
+    shape = x.shape
+    x = x.reshape(x.shape[0], -1)
     if p == 0:
-        return torch.sign(x) * torch.relu(torch.abs(x) - theta)
+        return (torch.sign(x) * torch.relu(torch.abs(x) - theta)).reshape(shape)
 
     abs_ = torch.abs(x)
     topk, _ = torch.topk(abs_, int(p), dim=0)
     topk, _ = topk.min(dim=0)
     index = (abs_ > topk).float()
-    return index * x + (1 - index) * torch.sign(x) * torch.relu(torch.abs(x) - theta)
-
-def soft_threshold_vector(x, theta, p):
-    if p == 0:
-        return torch.sign(x) * torch.relu((torch.abs(x).T - theta).T)
-
-    abs_ = torch.abs(x)
-    topk, _ = torch.topk(abs_, p, dim=0)
-    topk, _ = topk.min(dim=0)
-    index = (abs_ > topk).float()
-    return index * x + (1 - index) * torch.sign(x) * torch.relu((torch.abs(x).T - theta).T)
-
+    return (index * x + (1 - index) * torch.sign(x) * torch.relu(torch.abs(x) - theta)).reshape(shape)
 
 class ISTA(nn.Module):
-    def __init__(self, m, n, k, forward_op, backward_op, L, lmbda):
+    def __init__(self, m, n, k, forward_op, backward_op, prox, L, lmbda):
         super(ISTA, self).__init__()
 
         self.m = m
@@ -41,9 +32,11 @@ class ISTA(nn.Module):
         self.backward_op = backward_op
         self.lmbda = lmbda
         self.L = L
+        self.prox = prox
 
     def forward(self, y, info):
         x = torch.zeros((y.shape[0], self.n), device=device)
+        x = torch.zeros(self.backward_op(y).shape, device=device)
 
         for i in range(self.k):
             a = y - self.forward_op(x)
@@ -53,7 +46,7 @@ class ISTA(nn.Module):
 
 
 class FISTA(nn.Module):
-    def __init__(self, m, n, k, forward_op, backward_op, L, lmbda):
+    def __init__(self, m, n, k, forward_op, backward_op,prox, L, lmbda):
         super(FISTA, self).__init__()
 
         self.m = m
@@ -63,9 +56,13 @@ class FISTA(nn.Module):
         self.backward_op = backward_op
         self.lmbda = lmbda
         self.L = L
+        self.prox = prox
+
 
     def forward(self, y, info):
         x = torch.zeros((y.shape[0], self.n), device=device)
+        x = torch.zeros(self.backward_op(y).shape, device=device)
+
         t = 1
         z = x
         for i in range(self.k):
@@ -81,7 +78,7 @@ class FISTA(nn.Module):
 
 
 class ALISTA(nn.Module):
-    def __init__(self, m, n, k, forward_op, backward_op, s, p):
+    def __init__(self, m, n, k, forward_op, backward_op, prox, s, p):
 
         super(ALISTA, self).__init__()
         self.m = m
@@ -91,12 +88,14 @@ class ALISTA(nn.Module):
         self.backward_op = backward_op
         self.p = p
         self.s = s
+        self.prox = prox
 
         self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
         self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
 
     def forward(self, y, info, include_cs=False):
-        x = torch.zeros((y.shape[0],self.n), device=device)
+        #x = torch.zeros((y.shape[0],self.n), device=device)
+        x = torch.zeros(self.backward_op(y).shape, device=device)
 
         cs = []
         for i in range(self.k):
@@ -125,7 +124,7 @@ def softsign(x):
 
 
 class NA_ALISTA(nn.Module):
-    def __init__(self, m, n, k, forward_op, backward_op, s, p, lstm_input="c_b", lstm_hidden=128):
+    def __init__(self, m, n, k, forward_op, backward_op, prox, s, p, lstm_input="c_b", lstm_hidden=128):
 
         super(NA_ALISTA, self).__init__()
         self.m = m
@@ -135,6 +134,7 @@ class NA_ALISTA(nn.Module):
         self.backward_op = backward_op
         self.s = s
         self.p = p
+        self.prox = prox
 
         if lstm_input == "c_b":
             self.regressor = NormLSTMCB(n, s, k, dim=lstm_hidden)
@@ -148,7 +148,8 @@ class NA_ALISTA(nn.Module):
         self.alpha = 0.99
 
     def forward(self, y, info, include_cs=False):
-        x = torch.zeros(y.shape[0], self.n, device=device)
+        #x = torch.zeros(y.shape[0], self.n, device=device)
+        x = torch.zeros(self.backward_op(y).shape, device=device)
 
         gammas = []
         thetas = []
@@ -161,13 +162,15 @@ class NA_ALISTA(nn.Module):
             a = self.forward_op(x)
             b = a - y
             c = self.backward_op(b)
-            pred, hidden, cellstate = self.regressor(b.T, c.T, hidden, cellstate)
+            pred, hidden, cellstate = self.regressor(b.reshape(x.shape[0], -1).T, c.reshape(x.shape[0], -1).T, hidden, cellstate)
             gamma = pred[:, :1]
             theta = pred[:, 1:]
             gammas.append(gamma)
             thetas.append(theta)
-            cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
+            cs.append(torch.norm(c.reshape(x.shape[0], -1), dim=0, p=1).reshape(-1, 1))
 
+            if len(c.shape)==4:
+                gamma = gamma.unsqueeze(2).unsqueeze(2)
             d = x - (gamma * c)
             x = soft_threshold(d, theta, self.p[i])
             xk.append(x.T)
@@ -308,7 +311,7 @@ class NormLSTMB(nn.Module):
 
 
 class ALISTA_AT(nn.Module):
-    def __init__(self, m, n, k, forward_op, backward_op, s, p):
+    def __init__(self, m, n, k, forward_op, backward_op, prox, s, p):
         super(ALISTA_AT, self).__init__()
         self.m = m
         self.n = n
@@ -317,18 +320,24 @@ class ALISTA_AT(nn.Module):
         self.backward_op = backward_op
         self.p = p
         self.s = s
+        self.prox = prox
 
         self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
         self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
 
     def forward(self, y, info):
-        x = torch.zeros((y.shape[0], self.n), device=device)
+        #x = torch.zeros((y.shape[0], self.n), device=device)
+        x = torch.zeros(self.backward_op(y).shape, device=device)
 
         for i in range(self.k):
             a = self.forward_op(x)
             b = a - y
             c = self.backward_op(b)
+
+
             theta = self.theta[i][0] * g(torch.abs(x))
+            if len(theta.shape) == 4:
+                theta = theta.reshape(x.shape[0], -1)
             x = soft_threshold(x - self.gamma[i][0] * c, theta, self.p[i])
         return x, torch.zeros(self.k, 1), torch.zeros(self.k, 1)
 
@@ -340,7 +349,7 @@ class ALISTA_AT(nn.Module):
 
 
 class AGLISTA(nn.Module):
-    def __init__(self, m, n, k, forward_op, backward_op, s, p):
+    def __init__(self, m, n, k, forward_op, backward_op,prox, s, p):
 
         super(AGLISTA, self).__init__()
         self.m = m
@@ -350,6 +359,7 @@ class AGLISTA(nn.Module):
         self.backward_op = backward_op
         self.p = p
         self.s = s
+        self.prox = prox
 
         self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for _ in range(k)])
         self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for _ in range(k)])
@@ -360,8 +370,7 @@ class AGLISTA(nn.Module):
         self.theta_initial = nn.ParameterList([nn.Parameter(torch.ones(1))])
 
     def forward(self, y, info):
-        x = torch.zeros((y.shape[0], self.n), device=device)
-
+        x = torch.zeros(self.backward_op(y).shape, device=device)
         for i in range(self.k):
 
             if i > 0:
@@ -374,7 +383,7 @@ class AGLISTA(nn.Module):
             b = a - y
 
             c = self.backward_op(b)
-            x_ = soft_threshold(x - self.gamma[i][0] * c, self.theta[i][0], self.p[i])
+            x_ = self.prox(x - self.gamma[i][0] * c, self.theta[i][0], self.p[i])
 
             overshoot = 1 + self.a[i][0] / (torch.abs(x_ - x) + self.eps)
             x = overshoot * x_ + (1 - overshoot) * x
