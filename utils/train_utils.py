@@ -83,7 +83,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     ).to_csv(model_dir + name + "/train_log")
 
 
-def train_model2(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, model_dir='res/models/',matrix_dir='res/matrices/'):
+def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, model_dir='res/models/',matrix_dir='res/matrices/'):
     if not os.path.exists(model_dir + name):
         os.makedirs(model_dir + name)
 
@@ -96,6 +96,7 @@ def train_model2(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mo
     index = torch.Tensor([2, 5, 11, 12, 14, 15, 16, 17, 18, 19, 21, 25]).long()
     m = len(index) * 32
     P_omega[index] = 1
+    P_omega = P_omega.to(device)
 
     L = 1
     wavelet = WT()
@@ -174,11 +175,14 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
         X = X.to(device)
 
         if transform is not None:
+          if i == 0:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(2, 2, figsize=(10, 10))
-            ax[0, 0].imshow(X[0, 0].detach().numpy())
-            X = transform.wt(X)
-            ax[0,1].imshow(X[0,0].detach().numpy())
+            ax[0, 0].imshow(X[0, 0].detach().cpu().numpy())
+          X = transform.wt(X)
+
+          if i == 0:
+            ax[0,1].imshow(X[0,0].detach().cpu().numpy())
 
         info = info.to(device)
         opt.zero_grad()
@@ -188,11 +192,11 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
 
         loss = ((X_hat - X) ** 2).mean()
         loss.backward()
-        print(loss.item())
 
         if transform is not None:
-            ax[1, 1].imshow(X_hat[0][0].detach().numpy())
-            ax[1,0].imshow(transform.iwt(X_hat)[0][0].detach().numpy())
+          if i == 0:
+            ax[1, 1].imshow(X_hat[0][0].detach().cpu().numpy())
+            ax[1,0].imshow(transform.iwt(X_hat)[0][0].detach().cpu().numpy())
             plt.show()
         nn.utils.clip_grad_norm_(model.parameters(), 1)
         opt.step()

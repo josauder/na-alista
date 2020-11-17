@@ -19,7 +19,6 @@ def soft_threshold(x, theta, p):
     topk, _ = torch.topk(abs_, int(p), dim=1)
     topk, _ = topk.min(dim=1)
     index = (abs_ > topk.unsqueeze(1)).float()
-    print(index.shape)
     return (index * x + (1 - index) * torch.sign(x) * torch.relu(torch.abs(x) - theta)).reshape(shape)
 
 class ISTA(nn.Module):
