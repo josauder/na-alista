@@ -95,12 +95,12 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
         return None
 
     torch.manual_seed(3)
-    P_omega = torch.zeros((128, 128))
-    P_omega[(torch.randn(64) * 21 + 64).long().clamp(0, 127)] = 1
-    print(P_omega.sum()/128)
-
+    size = 256
+    P_omega = torch.zeros((size, size))
+    P_omega[(torch.randn(int(size / 4)) * 26 + size/2).long().clamp(0, size-1)] = 1
+    print(P_omega.sum()/size)
     import matplotlib.pyplot as plt
-    plt.imshow(P_omega)
+    plt.imshow(P_omega, cmap="gray")
     plt.show()
     P_omega = P_omega.to(device)
 
@@ -112,7 +112,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     backward_op = lambda x: wavelet.wt(ifft2(P_omega * x))
 
     train_transform = Compose([Grayscale(), RandomAffine((0, 0), translate=(0, 0.1), scale=(0.8, 1.2)),
-                               RandomResizedCrop((128, 128), scale=(1.0, 1.0)), RandomHorizontalFlip(),
+                               RandomResizedCrop((size, size), scale=(1.0, 1.0)), RandomHorizontalFlip(),
                                RandomVerticalFlip(), ToTensor()])
     # train_dataset = datasets.CIFAR100('.', train=True, transform=train_transform, target_transform=None, download=True)
 
@@ -122,11 +122,11 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     #    os.system("mv realdata/no/" + str(i.replace(" ", "\\ ")) + " realdata/no/" + str(i.replace(" ", "").lower()))
 
     train_dataset = datasets.ImageFolder('realdata/train', transform=train_transform)
-    test_transform = Compose([Resize(128), CenterCrop(128), Grayscale(), ToTensor()])
+    test_transform = Compose([Resize(size), CenterCrop(size), Grayscale(), ToTensor()])
     test_dataset = datasets.ImageFolder('realdata/test', transform=test_transform)
     # test_dataset = datasets.CIFAR100('.', train=False, transform=test_transform, target_transform=None, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=16, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=100, shuffle=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=100, shuffle=False)
 
     n = 64 * 64
 
@@ -194,8 +194,8 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
         info = info.to(device)
         opt.zero_grad()
 
-        y = model.forward_op(X)
-        X_hat, gammas, thetas = model(noise_fn(y), info)
+        y = noise_fn(model.forward_op(X))
+        X_hat, gammas, thetas = model(y, info)
 
         # Xhatnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1)
         if transform is not None:
@@ -227,30 +227,30 @@ def test_one_epoch(model, loader, noise_fn, transform=None):
                 if i == 0:
                     import matplotlib.pyplot as plt
                     fig, ax = plt.subplots(3, 2, figsize=(10, 10))
-                    ax[0, 0].imshow(X[0, 0].detach().cpu().numpy())
+                    ax[0, 0].imshow(X[0, 0].detach().cpu().numpy(), cmap="gray")
                 X = transform.wt(X)
                 if i == 0:
                     import matplotlib.pyplot as plt
-                    ax[0, 1].imshow(X[0, 0].detach().cpu().numpy())
+                    ax[0, 1].imshow(X[0, 0].detach().cpu().numpy(), cmap="gray")
 
                 # Xnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1)
                 # X = X/Xnorm
             info = info.to(device)
-            y = model.forward_op(X)
+            y = noise_fn(model.forward_op(X))
             if i == 0:
                 import matplotlib.pyplot as plt
-                ax[1, 0].imshow(torch.sqrt(torch.abs(y))[0, 0].detach().cpu().numpy())
-                ax[1, 1].imshow(transform.iwt(model.backward_op(y))[0, 0].detach().cpu().numpy())
+                ax[1, 0].imshow(torch.sqrt(torch.abs(y))[0, 0].detach().cpu().numpy(), cmap="gray")
+                ax[1, 1].imshow(transform.iwt(model.backward_op(y))[0, 0].detach().cpu().numpy(), cmap="gray")
 
-            X_hat, gammas, thetas = model(noise_fn(y), info)
+            X_hat, gammas, thetas = model(y, info)
 
             Xbackward = model.backward_op(y)
             # Xbackwardnorm = torch.norm(Xbackward.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1) / 0.01
             # Xhatnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1) / 0.01
             if transform is not None:
                 if i == 0:
-                    ax[2, 0].imshow(X_hat[0][0].detach().cpu().numpy())
-                    ax[2, 1].imshow(transform.iwt(X_hat)[0][0].detach().cpu().numpy())
+                    ax[2, 0].imshow(X_hat[0][0].detach().cpu().numpy(), cmap="gray")
+                    ax[2, 1].imshow(transform.iwt(X_hat)[0][0].detach().cpu().numpy(), cmap="gray")
                     plt.show()
 
             if transform is not None:
@@ -285,8 +285,8 @@ def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/model
                 X = X.to(device)
 
                 info = info.to(device)
-                y = model.forward_op(X)
-                X_hat, gammas, thetas = model(noise_fn(y), info)
+                y = noise_fn(model.forward_op(X))
+                X_hat, gammas, thetas = model(y, info)
 
                 test_loss.extend(list(((X_hat - X) ** 2).cpu().detach().numpy()))
                 test_normalizer.extend(list((X ** 2).cpu().detach().numpy()))

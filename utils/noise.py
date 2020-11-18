@@ -15,8 +15,10 @@ class GaussianNoise(nn.Module):
         super(GaussianNoise, self).__init__()
         self.snr = snr
 
+
     def forward(self, y):
-        std = torch.std(y, dim=1) * np.power(10.0, -self.snr / 20)
-        noise = torch.normal(torch.zeros_like(y, device=device),
-                             std=(torch.zeros_like(y, device=device) + std.reshape(-1, 1)))
-        return y + noise
+        y_ = y.reshape(y.shape[0], -1)
+        std = torch.std(y_, dim=1) * np.power(10.0, -self.snr / 20)
+        noise = torch.normal(torch.zeros_like(y_, device=device),
+                             std=(torch.zeros_like(y_, device=device) + std.reshape(-1, 1)))
+        return y + noise.reshape(y.shape)
