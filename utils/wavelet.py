@@ -24,7 +24,7 @@ class WT(object):
                                    rec_hi.unsqueeze(0) * rec_lo.unsqueeze(1),
                                    rec_hi.unsqueeze(0) * rec_hi.unsqueeze(1)], dim=0)
 
-    def wt(self, vimg, levels=3):
+    def wt(self, vimg, levels=5):
         h = vimg.size(2)
         w = vimg.size(3)
         padded = torch.nn.functional.pad(vimg, (2, 2, 2, 2), 'constant')
@@ -37,7 +37,7 @@ class WT(object):
         res = res.reshape(-1, 1, h, w)
         return res
 
-    def iwt(self, vres, levels=3):
+    def iwt(self, vres, levels=5):
         h = vres.size(2)
         w = vres.size(3)
         res = vres.reshape(-1, h // 2, 2, w // 2).transpose(1, 2).contiguous().reshape(-1, 4, h // 2, w // 2).clone()
