@@ -29,7 +29,7 @@ class ComplexVectorDataset(Dataset):
         a = torch.bernoulli(a).int()
         z = torch.randn(self.l,self.n,2) * torch.exp(-1.0 * self.t / self.n * torch.arange(self.n).float()).unsqueeze(0).unsqueeze(2) # scale variance accordingly
         z = a * z
-        z = z / torch.sqrt((torch.norm(z[:,:,0],dim=-1)**2 + torch.norm(z[:,:,1],dim=-1)**2).mean() / 1024)
+        z = z / torch.sqrt((torch.norm(z[:,:,0],dim=-1)**2 + torch.norm(z[:,:,1],dim=-1)**2).mean())
         self.data = z
 
 class BernoulliSyntheticDataset(Dataset):
