@@ -6,6 +6,31 @@ import utils.conf as conf
 
 device = conf.device
 
+class ComplexVectorDataset(Dataset):
+    """
+    Dataset for creating sparse vectors.
+    """
+    def __init__(self, m, n, s, l):
+        self.m = m
+        self.n = n
+        self.s = s
+        self.l = l
+        self.t = 2.5
+        self.reset()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return torch.Tensor(self.data[idx]), torch.Tensor([0.0])
+
+    def reset(self):
+        a = torch.zeros((self.l, self.n, 1)) + self.s / self.n
+        a = torch.bernoulli(a).int()
+        z = torch.randn(self.l,self.n,2) * torch.exp(-1.0 * self.t / self.n * torch.arange(self.n).float()).unsqueeze(0).unsqueeze(2) # scale variance accordingly
+        z = a * z
+        z = z / torch.sqrt((torch.norm(z[:,:,0],dim=-1)**2 + torch.norm(z[:,:,1],dim=-1)**2).mean() / 1024)
+        self.data = z
 
 class BernoulliSyntheticDataset(Dataset):
     """
@@ -25,7 +50,7 @@ class BernoulliSyntheticDataset(Dataset):
         return torch.Tensor(self.data[idx]), torch.Tensor([0.0])
 
     def reset(self):
-        self.data = torch.zeros((self.l, self.n)) + self.s / self.n
+        self.data = torch.zeros((self.l, self.n)) + self.s /self.n
         self.data = torch.bernoulli(self.data) * torch.normal(
             torch.zeros((self.l, self.n)), torch.ones((self.l, self.n))
         )
