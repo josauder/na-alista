@@ -192,7 +192,6 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
 
         info = info.to(device)
         opt.zero_grad()
-        noise_fn = lambda x: x
         y = noise_fn(model.forward_op(X))  # (l,n,2)
         #print(y.size())
         #print((torch.norm(y[:, :, 0], dim=-1) ** 2 + torch.norm(y[:, :, 1], dim=-1) ** 2).mean() / 0.2 / 1024)
