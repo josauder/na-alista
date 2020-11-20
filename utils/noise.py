@@ -27,11 +27,13 @@ class GaussianNoise(nn.Module):
             c_std = std * 1.0 / np.sqrt(2)
             noise = torch.normal(torch.zeros_like(y_, device=device),
                                  std=(torch.zeros_like(y_, device=device) + c_std.reshape(-1, 1)))
-            print('noise')
-            print(std)
-            print((torch.norm(noise[:, :, 0], dim=-1) ** 2 + torch.norm(noise[:, :, 1], dim=-1) ** 2).mean() / 1024)
         else:
             std = torch.std(y_, dim=1) * np.power(10.0, -self.snr / 20)
             noise = torch.normal(torch.zeros_like(y_, device=device),
                                  std=(torch.zeros_like(y_, device=device) + std.reshape(-1, 1)))
+        # db of 10 works :)
+        #noise = noise.reshape(y.shape)
+        #noise_l2  = (torch.norm(noise[:, :, 0], dim=-1) ** 2 + torch.norm(noise[:, :, 1], dim=-1) ** 2).mean()
+        #signal_l2 = (torch.norm(y[:, :, 0], dim=-1) ** 2 + torch.norm(y[:, :, 1], dim=-1) ** 2).mean()
+        #print(torch.log10(signal_l2/noise_l2) * 10.0)
         return y + noise.reshape(y.shape)

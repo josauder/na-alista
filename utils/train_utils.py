@@ -105,9 +105,17 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
 
     # forward op: P_omega * fft_1d(x)
     # backward op: ifft(P_omega * y)
+    overall_length = 1024
+    padding = 200
 
-    ii = (1024 - n)
-    P_omega = torch.bernoulli(torch.ones(n + ii) * 0.2)
+    ii = ( overall_length - n)
+    P_omega = torch.zeros(n + ii)
+    rs = np.random.RandomState(322)
+    non_zero_m = rs.choice(list(range(padding,overall_length-padding)),m)
+    print('m')
+    print(m)
+    print(non_zero_m)
+    P_omega[non_zero_m] = 1.0# take 10 measurements
     P_omega = torch.stack([P_omega, P_omega])
     P_omega = P_omega.to(device)
     plt.imshow(P_omega.to('cpu'), cmap='gray')
@@ -184,11 +192,11 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
 
         info = info.to(device)
         opt.zero_grad()
-
+        noise_fn = lambda x: x
         y = noise_fn(model.forward_op(X))  # (l,n,2)
-        print(y.size())
-        print((torch.norm(y[:, :, 0], dim=-1) ** 2 + torch.norm(y[:, :, 1], dim=-1) ** 2).mean() / 0.2 / 1024)
-        print((torch.norm(X[:, :, 0], dim=-1) ** 2 + torch.norm(X[:, :, 1], dim=-1) ** 2).mean() / 1024)
+        #print(y.size())
+        #print((torch.norm(y[:, :, 0], dim=-1) ** 2 + torch.norm(y[:, :, 1], dim=-1) ** 2).mean() / 0.2 / 1024)
+        #print((torch.norm(X[:, :, 0], dim=-1) ** 2 + torch.norm(X[:, :, 1], dim=-1) ** 2).mean() / 1024)
         # print(torch,)
         X_hat, gammas, thetas = model(y, info)
 

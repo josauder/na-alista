@@ -85,8 +85,8 @@ class ALISTA(nn.Module):
         self.p = p
         self.s = s
 
-        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
-        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.6) for i in range(k)])
+        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.3) for i in range(k)])
+        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.3) for i in range(k)])
 
     def forward(self, y, info, include_cs=False):
         # x = torch.zeros((y.shape[0],self.n), device=device)
