@@ -7,8 +7,6 @@ import utils.conf as conf
 device = conf.device
 
 
-
-
 def soft_threshold(x, theta, p):
     if p == 0:
         return torch.sign(x) * torch.relu(torch.abs(x) - theta)
@@ -70,7 +68,6 @@ class FISTA(nn.Module):
 
 class ALISTA(nn.Module):
     def __init__(self, m, n, k, phi, W, s, p):
-
         super(ALISTA, self).__init__()
         self.m = m
         self.n = n
@@ -84,21 +81,19 @@ class ALISTA(nn.Module):
         self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
         self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
 
-    def forward(self, y, info, include_cs=False):
+    def forward(self, y, phi, W):
         x = torch.zeros((self.n, y.shape[0]), device=device)
 
         cs = []
         for i in range(self.k):
-            a = torch.matmul(self.phi, x)
+            a = torch.matmul(phi, x)
             b = a - y.T
-            c = torch.matmul(self.W.T, b)
+            c = torch.matmul(W.T, b)
             x = soft_threshold(x - self.gamma[i][0] * c, self.theta[i][0], self.p[i])
 
-            #cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
+            # cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
 
-        if include_cs:
-            return x.T, None, None#torch.zeros(self.k, 1), torch.zeros(self.k, 1), torch.cat(cs, dim=1)
-        return x.T, None, None#torch.zeros(self.k, 1), torch.zeros(self.k, 1)
+        return x.T  # , None, None#torch.zeros(self.k, 1), torch.zeros(self.k, 1)
 
     def save(self, name):
         torch.save(self.state_dict(), name)
@@ -131,6 +126,7 @@ class NA_ALISTA(nn.Module):
         self.k = k
         self.phi = torch.Tensor(phi).to(device)
         self.W = torch.Tensor(W).to(device)
+        self.lstm_hidden = lstm_hidden
         self.s = s
         self.p = p
 
@@ -145,25 +141,27 @@ class NA_ALISTA(nn.Module):
 
         self.alpha = 0.99
 
-    def forward(self, y, info, include_cs=False):
+    def forward(self, y, phi, W):
         x = torch.zeros(self.n, y.shape[0], device=device)
 
-        cellstate, hidden = self.regressor.get_initial(y.shape[0])
+        # cellstate, hidden = self.regressor.get_initial(y.shape[0])
+        cellstate = torch.ones((y.shape[0], self.lstm_hidden), device=device)
+        hidden = cellstate
 
-        for i in range(self.k):
-            a = torch.matmul(self.phi, x)
-            c = torch.matmul(self.W.T, a - y.T)
-            pred, hidden, cellstate = self.regressor(b, c, hidden, cellstate)
-            gamma = pred[:, :1]
-            theta = pred[:, 1:]
-            #cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
+        # for i in range(self.k):
+        i = 0
+        a = torch.matmul(phi, x)
+        b = a - y.T
+        c = torch.matmul(W.T, b)
+        pred, hidden, cellstate = self.regressor(b, c, hidden, cellstate)
+        gamma = pred[:, :1]
+        theta = pred[:, 1:]
+        # cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
 
-            d = x - (gamma * c.T).T
-            x = soft_threshold_vector(d, theta, self.p[i])
-            #xk.append(x.T)
-        if include_cs:
-            return x.T, None, None, None#torch.cat(gammas, dim=1), torch.cat(thetas, dim=1), torch.cat(cs, dim=1), xk
-        return x.T, None, None#torch.cat(gammas, dim=1), torch.cat(thetas, dim=1)
+        d = x - (gamma * c.T).T
+        x = soft_threshold_vector(d, theta, self.p[i])
+        # xk.append(x.T)
+        return x.T  # torch.cat(gammas, dim=1), torch.cat(thetas, dim=1)
 
     def save(self, name):
         torch.save(self.state_dict(), name)
@@ -199,10 +197,12 @@ class NormLSTMC(nn.Module):
 
     def forward(self, b, c, hidden, cellstate):
         cl1 = torch.norm(c, dim=0, p=1)
-        if not self.initialized_normalizers:
-            self.cl1_mean = cl1.mean().item()
-            self.cl1_std = cl1.std().item()
-            self.initialized_normalizers = True
+        # if not self.initialized_normalizers:
+        #    self.cl1_mean = cl1.mean().item()
+        #    self.cl1_std = cl1.std().item()
+        #    self.initialized_normalizers = True
+        self.cl1_mean = 1
+        self.cl1_std = 1
 
         stack = torch.stack([(cl1 - self.cl1_mean) / self.cl1_std]).T
         hidden, cellstate = self.lstm(stack, (hidden, cellstate))
@@ -240,12 +240,16 @@ class NormLSTMCB(nn.Module):
     def forward(self, b, c, hidden, cellstate):
         bl1 = torch.norm(b, dim=0, p=1)
         cl1 = torch.norm(c, dim=0, p=1)
-        if not self.initialized_normalizers:
-            self.bl1_mean = bl1.mean().item()
-            self.bl1_std = bl1.std().item()
-            self.cl1_mean = cl1.mean().item()
-            self.cl1_std = cl1.std().item()
-            self.initialized_normalizers = True
+        # if not self.initialized_normalizers:
+        #    self.bl1_mean = bl1.mean().item()
+        #    self.bl1_std = bl1.std().item()
+        #    self.cl1_mean = cl1.mean().item()
+        #    self.cl1_std = cl1.std().item()
+        #    self.initialized_normalizers = True
+        self.cl1_mean = 1
+        self.cl1_std = 1
+        self.bl1_mean = 1
+        self.bl1_std = 1
 
         stack = torch.stack([(bl1 - self.bl1_mean) / self.bl1_std, (cl1 - self.cl1_mean) / self.cl1_std]).T
 
@@ -285,10 +289,12 @@ class NormLSTMB(nn.Module):
 
     def forward(self, b, c, hidden, cellstate):
         bl1 = torch.norm(b, dim=0, p=1)
-        if not self.initialized_normalizers:
-            self.bl1_mean = bl1.mean().item()
-            self.bl1_std = bl1.std().item()
-            self.initialized_normalizers = True
+        # if not self.initialized_normalizers:
+        #    self.bl1_mean = bl1.mean().item()
+        #    self.bl1_std = bl1.std().item()
+        #    self.initialized_normalizers = True
+        self.bl1_mean = 1
+        self.bl1_std = 1
 
         stack = torch.stack([(bl1 - self.bl1_mean) / self.bl1_std]).T
 
