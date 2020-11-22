@@ -15,74 +15,18 @@ from torchvision.transforms import Grayscale, ToTensor, Compose, RandomVerticalF
 from torchvision import datasets
 from torch.utils.data import DataLoader
 from utils.algorithms import soft_threshold
+import pytorch_ssim
+from utils.tv import TVSynthesis
 
+ssim_loss = pytorch_ssim.SSIM(window_size=11)
 device = conf.device
 
 
-def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, model_dir='res/models/',
-                matrix_dir='res/matrices/'):
-    if not os.path.exists(model_dir + name):
-        os.makedirs(model_dir + name)
-
-    if os.path.isfile(model_dir + name + "/train_log"):
-        print("Results for " + name + " are already available. Skipping computation...")
-        return None
-
-    phi, W_frob = get_matrices(m, n, matrix_dir=matrix_dir)
-
-    L = np.max(np.linalg.eigvals(np.dot(phi, phi.T)).astype(np.float32))
-    phi = torch.Tensor(phi).to(device)
-    W_frob = torch.Tensor(W_frob).to(device)
-    forward_op = lambda x: torch.matmul(phi, x.T).T
-    backward_op = lambda x: torch.matmul(W_frob.T, x.T).T
-
-    data = Synthetic(m, n, s, s)
-    # put W_frob = reverse tv norm operator ...
-    model = model_fn(m, n, s, k, p, forward_op, backward_op, L).to(device)
-
-    if type(model) not in [ISTA, FISTA]:
-        opt = torch.optim.Adam(model.parameters(), lr=initial_lr)
-    else:
-        model.backward_op = lambda x: torch.matmul(phi.T, x.T).T
-
-    train_losses = []
-    train_dbs = []
-    test_losses = []
-    test_dbs = []
-
-    if type(model) in [ISTA, FISTA]:
-        epochs = 1
-    for i in range(epochs):
-        if type(model) not in [ISTA, FISTA]:
-            train_loss, train_db = train_one_epoch(model, data.train_loader, noise_fn, opt)
-        else:
-            train_loss = 0
-            train_db = 0
-        test_loss, test_db = test_one_epoch(model, data.test_loader, noise_fn)
-
-        train_losses.append(train_loss)
-        test_losses.append(test_loss)
-        train_dbs.append(train_db)
-        test_dbs.append(test_db)
-
-        if test_dbs[-1] == min(test_dbs) and type(model) not in [ISTA, FISTA]:
-            print("saving!")
-            model.save(model_dir + name + "/checkpoint")
-
-        data.train_data.reset()
-
-        print(i, train_db, test_db)
-
-    print("saving results to " + model_dir + name + "/train_log")
-    pd.DataFrame(
-        {
-            "epoch": range(epochs),
-            "train_loss": train_losses,
-            "test_loss": test_losses,
-            "train_dbs": train_dbs,
-            "test_dbs": test_dbs,
-        }
-    ).to_csv(model_dir + name + "/train_log")
+def zerocorners(X, size):
+    return X
+    X[:, :, :, 0:2] *= 0
+    X[:, :, :, size - 2:size] *= 0
+    return X
 
 
 def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, model_dir='res/models/',
@@ -94,12 +38,20 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
         print("Results for " + name + " are already available. Skipping computation...")
         return None
 
-    torch.manual_seed(3)
-    size = 256
+    torch.manual_seed(0)
+    size = 100
     P_omega = torch.zeros((size, size))
-    P_omega[(torch.randn(int(size / 4)) * 26 + size / 2).long().clamp(0, size - 1)] = 1
+    #P_omega[(torch.randn(int(size / 1.5)) * 13 + (size + 1) / 2).long().clamp(0, size - 1)] = 1
+    #print(P_omega.sum() / (size ** 2))
 
-    print(P_omega.sum() / size)
+    std = size / 5
+    mean = (size +1)/2
+    sample = np.random.normal(mean, std, size=(int(size**2 * 0.35), 2))
+    sample = np.round(sample).clip(0, size-1)
+    P_omega[sample[:,0], sample[:,1]] = 1
+    print(P_omega.sum() / (size**2))
+    #P_omega = torch.bernoulli(torch.zeros(size, size) + 0.7)
+    # P_omega *= torch.bernoulli(torch.zeros(size,1) + 0.4)
     import matplotlib.pyplot as plt
     plt.imshow(P_omega, cmap="gray")
     plt.imsave("mask.png", P_omega, cmap="gray")
@@ -109,9 +61,11 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     L = 1
     # fft2 = lambda x: x
     # ifft2 = lambda x: x
-    wavelet = WT()
-    forward_op = lambda x: P_omega * fft2(wavelet.iwt(x))
-    backward_op = lambda x: wavelet.wt(ifft2(P_omega * x))
+    transform = TVSynthesis(size ** 2)
+    a = transform.adj
+    transform.adj = lambda x: a(zerocorners(x, size))
+    forward_op = lambda x: P_omega * fft2(transform.adj(x))
+    backward_op = lambda x: zerocorners(transform.dot(ifft2(P_omega * x)), size)
 
     train_transform = Compose([Grayscale(), RandomAffine((0, 0), translate=(0, 0.1), scale=(0.8, 1.2)),
                                RandomResizedCrop((size, size), scale=(1.0, 1.0)), RandomHorizontalFlip(),
@@ -124,14 +78,14 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     #    os.system("mv realdata/no/" + str(i.replace(" ", "\\ ")) + " realdata/no/" + str(i.replace(" ", "").lower()))
 
     train_dataset = datasets.ImageFolder('realdata/train', transform=train_transform)
-    test_transform = Compose([Resize(size), CenterCrop(size), Grayscale(), ToTensor()])
+    test_transform = Compose(
+        [Resize(size), CenterCrop(size), Grayscale(), ToTensor()])
     test_dataset = datasets.ImageFolder('realdata/test', transform=test_transform)
     # test_dataset = datasets.MNIST('.', train=False, transform=test_transform, target_transform=None, download=True)
-    train_loader = DataLoader(train_dataset, batch_size=100, shuffle=True, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=100, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=10, shuffle=False)
 
-    n = 64 * 64
-
+    n = size ** 2
     model = model_fn(m, n, s, k, p, forward_op, backward_op, L).to(device)
 
     if type(model) not in [ISTA, FISTA]:
@@ -139,40 +93,41 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
 
     train_losses = []
     train_dbs = []
-    test_losses = []
-    test_dbs = []
+    test_stats = []
 
     if type(model) in [ISTA, FISTA]:
         epochs = 1
     for i in range(epochs):
         if type(model) not in [ISTA, FISTA]:
-            train_loss, train_db = train_one_epoch(model, train_loader, noise_fn, opt, transform=wavelet)
+            train_loss, train_db = train_one_epoch(model, train_loader, noise_fn, opt, transform=transform)
         else:
             train_loss = 0
             train_db = 0
-        test_loss, test_db = test_one_epoch(model, test_loader, noise_fn, transform=wavelet)
-
+        test_stat = test_one_epoch(model, test_loader, noise_fn, transform=transform)
+        test_stat['train_db'] = train_db
+        test_stat['train_loss'] = train_loss
+        print(test_stat)
+        test_stats.append(test_stat)
         train_losses.append(train_loss)
-        test_losses.append(test_loss)
         train_dbs.append(train_db)
-        test_dbs.append(test_db)
 
-        if test_dbs[-1] == min(test_dbs) and type(model) not in [ISTA, FISTA]:
-            print("saving!")
-            model.save(model_dir + name + "/checkpoint")
+        # if test_dbs[-1] == min(test_dbs) and type(model) not in [ISTA, FISTA]:
+        # print("saving!")
+        #    model.save(model_dir + name + "/checkpoint")
 
-        print(i, train_db, test_db)
+        # print(i, train_db, test_db)
 
-    print("saving results to " + model_dir + name + "/train_log")
-    pd.DataFrame(
-        {
-            "epoch": range(epochs),
-            "train_loss": train_losses,
-            "test_loss": test_losses,
-            "train_dbs": train_dbs,
-            "test_dbs": test_dbs,
-        }
-    ).to_csv(model_dir + name + "/train_log")
+    # print("saving results to " + model_dir + name + "/train_log")
+    #pd.DataFrame(
+    #    {
+    #        "epoch": range(epochs),
+    #        "train_loss": train_losses,
+    #        "test_loss": test_losses,
+    #        "train_dbs": train_dbs,
+    #        "test_dbs": test_dbs,
+    #    }
+    # ).to_csv(model_dir + name + "/train_log")
+    return test_stats
 
 
 def train_one_epoch(model, loader, noise_fn, opt, transform=None):
@@ -188,7 +143,11 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
                 #  import matplotlib.pyplot as plt
                 #  fig, ax = plt.subplots(2, 2, figsize=(10, 10))
                 #  ax[0, 0].imshow(X[0, 0].detach().cpu().numpy())
-                X = transform.wt(X)
+                # mean = torch.mean(X.reshape(X.shape[0], -1), dim=1)
+                # X -= mean.reshape(X.shape[0], 1, 1, 1)
+                X = transform.dot(X)
+                Xadj = transform.adj(X)
+
                 # Xnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1)
                 # X = X/Xnorm
 
@@ -200,13 +159,18 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
 
             y = noise_fn(model.forward_op(X))
             X_hat, gammas, thetas = model(y, info)
+            X_hat_adj = transform.adj(X_hat).clamp(0, 1)
+            X_hat = zerocorners(X_hat, 64)
 
             # Xhatnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1)
             if transform is not None:
-                loss = ((X_hat - X) ** 2).mean()
+                #loss = (1 - ssim_loss(X_hat_adj, Xadj)).mean()
+                #loss = ((X_hat - X) ** 2).mean()
+                loss = ((X_hat_adj - Xadj) ** 2).mean()
             else:
                 loss = ((X_hat - X) ** 2).mean()
             loss.backward()
+            X_hat_adj = transform.adj(X_hat).clamp(0, 1)
 
             # if transform is not None:
             # if i == 0:
@@ -221,9 +185,12 @@ def train_one_epoch(model, loader, noise_fn, opt, transform=None):
 
 
 def test_one_epoch(model, loader, noise_fn, transform=None):
-    test_loss = 0
-    test_loss_no_recon = 0
+    test_loss = []
+    test_img_loss = []
+    test_ssim = []
+    test_loss_no_recon = []
     test_normalizer = 0
+    test_normalizer_img = 0
     with torch.no_grad():
         for i, (X, info) in enumerate(loader):
             X = X.to(device)
@@ -231,11 +198,13 @@ def test_one_epoch(model, loader, noise_fn, transform=None):
             if transform is not None:
                 if i == 0:
                     import matplotlib.pyplot as plt
-                    fig, ax = plt.subplots(3, 2, figsize=(10, 10))
-                    # fig, ax = plt.subplots()
+                    fig, ax = plt.subplots(4, 2, figsize=(10, 10))
                     ax[0, 0].imshow(X[1, 0].detach().cpu().numpy(), cmap="gray")
                     plt.imsave("original.png", X[1, 0].detach().cpu().numpy(), cmap="gray")
-                X = transform.wt(X)
+                # mean = torch.mean(X.reshape(X.shape[0], -1), dim=1)
+                # X -= mean.reshape(X.shape[0], 1, 1, 1)
+                X = transform.dot(X)
+                Xadj = transform.adj(X)
                 if i == 0:
                     import matplotlib.pyplot as plt
                     ax[0, 1].imshow(X[1, 0].detach().cpu().numpy(), cmap="gray")
@@ -246,34 +215,55 @@ def test_one_epoch(model, loader, noise_fn, transform=None):
             info = info.to(device)
             y = noise_fn(model.forward_op(X))
             if i == 0:
-                import matplotlib.pyplot as plt
+                # import matplotlib.pyplot as plt
                 ax[1, 0].imshow(torch.sqrt(torch.abs(y))[1, 0].detach().cpu().numpy(), cmap="gray")
                 plt.imsave("fourierundersampled.png",
                            torch.sqrt(torch.sqrt((torch.abs(y)[0, 0] + torch.abs(y)[0, 1]))).detach().cpu().numpy(),
                            cmap="gray")
-                ax[1, 1].imshow(transform.iwt(model.backward_op(y))[1, 0].detach().cpu().numpy(), cmap="gray")
+                ax[1, 1].imshow(transform.adj(model.backward_op(y)).clamp(0, 1)[1, 0].detach().cpu().numpy(),
+                                cmap="gray")
                 plt.imsave("direct_recon.png",
-                           transform.iwt(model.backward_op(y))[0, 0].clamp(0, 1).detach().cpu().numpy(), cmap="gray")
+                           transform.adj(model.backward_op(y))[0, 0].clamp(0, 1).detach().cpu().numpy(), cmap="gray")
 
             X_hat, gammas, thetas = model(y, info)
-
+            X_hat = zerocorners(X_hat, 64)
+            X_hat_adj = transform.adj(X_hat).clamp(0, 1)
             Xbackward = model.backward_op(y)
+            Xbackward = Xbackward.clamp(0, 1)
+
             # Xbackwardnorm = torch.norm(Xbackward.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1) / 0.01
             # Xhatnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1) / 0.01
             if transform is not None:
                 if i == 0:
                     ax[2, 0].imshow(X_hat[1][0].detach().cpu().numpy(), cmap="gray")
-                    ax[2, 1].imshow(transform.iwt(X_hat)[1][0].detach().cpu().numpy(), cmap="gray")
-                    plt.imsave("recon.png", transform.iwt(X_hat)[1, 0].clamp(0, 1).detach().cpu().numpy(), cmap="gray")
+
+                    ax[2, 1].imshow(X_hat_adj[1][0].detach().cpu().numpy(), cmap="gray")
+                    ax[3, 1].imshow((X_hat_adj - Xadj)[1][0].detach().cpu().numpy(), cmap="gray")
+                    ax[3, 0].hist(X_hat[1][0].detach().cpu().numpy().flatten(), bins=100)
+                    plt.imsave("recon.png", X_hat_adj[1, 0].clamp(0, 1).detach().cpu().numpy(), cmap="gray")
                     plt.show()
             if transform is not None:
-                test_loss += ((X_hat - X) ** 2).mean().item()
-                test_loss_no_recon += (((X - Xbackward)) ** 2).mean().item()
+                test_loss.append(((X_hat - X) ** 2).mean().item())
+                test_img_loss.append(((X_hat_adj - Xadj) ** 2).mean().item())
+                test_ssim.append((ssim_loss(X_hat_adj, Xadj)).mean().item())
+                test_loss_no_recon.append((((X - Xbackward)) ** 2).mean().item())
             else:
                 test_loss += ((X_hat - X) ** 2).mean().item()
             test_normalizer += (X ** 2).mean().item()
-    print("NO RECON:", 10 * np.log10(test_loss_no_recon / test_normalizer))
-    return test_loss / len(loader), 10 * np.log10(test_loss / test_normalizer)
+            test_normalizer_img += (Xadj ** 2).mean().item()
+    no_recon = 10 * np.log10(sum(test_loss_no_recon) / test_normalizer)
+    nmse = 10 * np.log10(sum(test_loss) / test_normalizer)
+    nmse_img = 10 * np.log10(sum(test_img_loss) / test_normalizer_img)
+    ssims = np.mean(test_ssim)
+    return {
+        "No recon": no_recon,
+        "NMSE": nmse,
+        "NMSE_img": nmse_img,
+        "loss": test_loss,
+        "loss_img": test_img_loss,
+        "SSIM": ssims
+    }
+    return sum(test_loss) / len(loader), 10 * np.log10(sum(test_loss) / test_normalizer)
 
 
 def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/models/', transform=None):
