@@ -37,23 +37,27 @@ will be approximately one hour (400 epochs).
 model_dir = 'res/models/'
 
 # Default settings for reproducing our experiments.
-m = 250  # measurements
-s = 50  # sparsity
-lr = 0.2 * 10e-4  # learning rate
+m = 100  # measurements
+s = 8  # sparsity
+lr = 0.05 * 10e-4  # learning rate
+
+def FISTA(m, n, s, k, p, forward_op, backward_op, L_):
+    return algo.FISTA(m, n, k, forward_op, backward_op, 1, 0.003)#it 300, m: 100,0.5, 0.002)
+
 
 for model_func in [NA_ALISTA_UR_128, ALISTA_AT, ALISTA, FISTA, ISTA, AGLISTA, NA_ALISTA_U_128, NA_ALISTA_R_128]:
 
     for k in [10, 12, 14, 16]: # number of iterations that the ISTA-style method is executed
 
-        epoch = 100 + 20 * k
+        epoch = 100 + 10 * k
 
         for n in [750, 500, 1000]: # input size
 
-            for noisename, noisefn in [["GaussianNoise40", GaussianNoise(40)], ["GaussianNoise20", GaussianNoise(20)]]:
+            for noisename, noisefn in [["GaussianNoise10", GaussianNoise(10)]]:
 
                 # apply the p-trick
-                p = (np.linspace((s * 1 * 1.2) // k, s * 1 * 1.2, k)).astype(int)
-
+                p = (np.linspace((s * 1 * 1.5) // k, s * 1 * 1.5, k)).astype(int)
+                p = p.clip(3, 10)
                 params = {
                     'model': model_func.__name__,
                     'm': m,

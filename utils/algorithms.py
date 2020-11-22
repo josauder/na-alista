@@ -53,7 +53,7 @@ class FISTA(nn.Module):
         self.forward_op = forward_op
         self.backward_op = backward_op
         self.lmbda = lmbda
-        self.L = L
+        self.L = 1
 
     def forward(self, y, info):
         x = torch.zeros((y.shape[0], self.n), device=device)
@@ -85,8 +85,8 @@ class ALISTA(nn.Module):
         self.p = p
         self.s = s
 
-        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.3) for i in range(k)])
-        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.3) for i in range(k)])
+        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 3) for i in range(k)])
+        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.02) for i in range(k)])
 
     def forward(self, y, info, include_cs=False):
         # x = torch.zeros((y.shape[0],self.n), device=device)
@@ -166,8 +166,8 @@ class NA_ALISTA(nn.Module):
                 gamma = gamma.unsqueeze(2).unsqueeze(2)
             elif len(c.shape) == 3:
                 gamma = gamma.unsqueeze(2)
-            d = x - (gamma * c)
-            x = soft_threshold(d, theta, self.p[i])
+            d = x - (gamma *3* c)
+            x = soft_threshold(d, theta/20, self.p[i])
             xk.append(x.T)
         if include_cs:
             return x, torch.cat(gammas, dim=1), torch.cat(thetas, dim=1), torch.cat(cs, dim=1), xk
@@ -316,8 +316,8 @@ class ALISTA_AT(nn.Module):
         self.p = p
         self.s = s
 
-        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
-        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for i in range(k)])
+        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 3) for i in range(k)])
+        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.02) for i in range(k)])
 
     def forward(self, y, info):
         # x = torch.zeros((y.shape[0], self.n), device=device)
@@ -329,9 +329,10 @@ class ALISTA_AT(nn.Module):
             c = self.backward_op(b)
 
             theta = self.theta[i][0] * g(torch.abs(x))
-            if len(theta.shape) == 4:
+            print(theta.mean())
+            if len(theta.shape) >= 3:
                 theta = theta.reshape(x.shape[0], -1)
-            x = soft_threshold(x - self.gamma[i][0] * c, theta, self.p[i])
+            x = soft_threshold(x -  self.gamma[i][0] * c, theta, self.p[i])
         return x, torch.zeros(self.k, 1), torch.zeros(self.k, 1)
 
     def save(self, name):
@@ -353,8 +354,8 @@ class AGLISTA(nn.Module):
         self.p = p
         self.s = s
 
-        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for _ in range(k)])
-        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.5) for _ in range(k)])
+        self.gamma = nn.ParameterList([nn.Parameter(torch.ones(1) * 3) for _ in range(k)])
+        self.theta = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.02) for _ in range(k)])
         self.a = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.01) for _ in range(k)])
         self.v = nn.ParameterList([nn.Parameter(torch.ones(1)) for _ in range(k)])
         self.vu = nn.ParameterList([nn.Parameter(torch.ones(1) * 0.05) for _ in range(k)])
