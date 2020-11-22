@@ -94,11 +94,11 @@ class ALISTA(nn.Module):
             c = torch.matmul(self.W.T, b)
             x = soft_threshold(x - self.gamma[i][0] * c, self.theta[i][0], self.p[i])
 
-            cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
+            #cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
 
         if include_cs:
-            return x.T, torch.zeros(self.k, 1), torch.zeros(self.k, 1), torch.cat(cs, dim=1)
-        return x.T, torch.zeros(self.k, 1), torch.zeros(self.k, 1)
+            return x.T, None, None#torch.zeros(self.k, 1), torch.zeros(self.k, 1), torch.cat(cs, dim=1)
+        return x.T, None, None#torch.zeros(self.k, 1), torch.zeros(self.k, 1)
 
     def save(self, name):
         torch.save(self.state_dict(), name)
@@ -148,30 +148,22 @@ class NA_ALISTA(nn.Module):
     def forward(self, y, info, include_cs=False):
         x = torch.zeros(self.n, y.shape[0], device=device)
 
-        gammas = []
-        thetas = []
-        cs = []
-        xk = []
-
         cellstate, hidden = self.regressor.get_initial(y.shape[0])
 
         for i in range(self.k):
             a = torch.matmul(self.phi, x)
-            b = a - y.T
-            c = torch.matmul(self.W.T, b)
+            c = torch.matmul(self.W.T, a - y.T)
             pred, hidden, cellstate = self.regressor(b, c, hidden, cellstate)
             gamma = pred[:, :1]
             theta = pred[:, 1:]
-            gammas.append(gamma)
-            thetas.append(theta)
-            cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
+            #cs.append(torch.norm(c, dim=0, p=1).reshape(-1, 1))
 
             d = x - (gamma * c.T).T
             x = soft_threshold_vector(d, theta, self.p[i])
-            xk.append(x.T)
+            #xk.append(x.T)
         if include_cs:
-            return x.T, torch.cat(gammas, dim=1), torch.cat(thetas, dim=1), torch.cat(cs, dim=1), xk
-        return x.T, torch.cat(gammas, dim=1), torch.cat(thetas, dim=1)
+            return x.T, None, None, None#torch.cat(gammas, dim=1), torch.cat(thetas, dim=1), torch.cat(cs, dim=1), xk
+        return x.T, None, None#torch.cat(gammas, dim=1), torch.cat(thetas, dim=1)
 
     def save(self, name):
         torch.save(self.state_dict(), name)
