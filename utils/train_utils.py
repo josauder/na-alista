@@ -94,7 +94,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
 
     torch.manual_seed(3)
 
-    import matplotlib.pyplot as plt
+    #import matplotlib.pyplot as plt
 
     L = 1
 
@@ -118,8 +118,8 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     P_omega[non_zero_m] = 1.0# take 10 measurements
     P_omega = torch.stack([P_omega, P_omega])
     P_omega = P_omega.to(device)
-    plt.imshow(P_omega.to('cpu'), cmap='gray')
-    plt.show()
+    #plt.imshow(P_omega.to('cpu'), cmap='gray')
+    #plt.show()
 
     def forward_op(x):
         other = torch.zeros(x.size()[0], ii, 2, device=device)
@@ -226,28 +226,28 @@ def test_one_epoch(model, loader, noise_fn, transform=None):
         for i, (X, info) in enumerate(loader):
             X = X.to(device)
 
-            if i == 0:
-                import matplotlib.pyplot as plt
-                fig, ax = plt.subplots(3, 2, figsize=(10, 10))
-                show(X.detach().cpu().numpy(), ax[0, 0])
+            #if i == 0:
+            #    import matplotlib.pyplot as plt
+            #    fig, ax = plt.subplots(3, 2, figsize=(10, 10))
+            #    show(X.detach().cpu().numpy(), ax[0, 0])
 
                 # Xnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1)
                 # X = X/Xnorm
             info = info.to(device)
             y = noise_fn(model.forward_op(X))
-            if i == 0:
-                import matplotlib.pyplot as plt
-                show(y.detach().cpu().numpy(), ax[1, 0])
-                show(model.backward_op(y).detach().cpu().numpy(), ax[1, 1])
+            #if i == 0:
+            #    import matplotlib.pyplot as plt
+            #    show(y.detach().cpu().numpy(), ax[1, 0])
+            #    show(model.backward_op(y).detach().cpu().numpy(), ax[1, 1])
             X_hat, gammas, thetas = model(y, info)
 
             Xbackward = model.backward_op(y)
             # Xbackwardnorm = torch.norm(Xbackward.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1) / 0.01
             # Xhatnorm = torch.norm(X.reshape(X.shape[0], -1), dim=1).reshape(X.shape[0], 1, 1, 1) / 0.01
 
-            if i == 0:
-                show(X_hat.detach().cpu().numpy(), ax[2, 1])
-                plt.show()
+            #if i == 0:
+            #    show(X_hat.detach().cpu().numpy(), ax[2, 1])
+            #    plt.show()
 
             if transform is not None:
                 test_loss += ((transform.iwt(X_hat) - transform.iwt(X)) ** 2).mean().item()
@@ -274,10 +274,10 @@ def evaluate_model(m, n, s, k, p, model_fn, noise_fn, name, model_dir='res/model
     with torch.no_grad():
         for epoch in range(1):
             for i, (X, info) in enumerate(data.train_loader):
-                if i == 0:
-                    import matplotlib.pyplot as plt
-                    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
-                    ax[0, 0].imshow(X[0, 0].detach().cpu().numpy())
+                #if i == 0:
+                #    import matplotlib.pyplot as plt
+                #    fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+                #    ax[0, 0].imshow(X[0, 0].detach().cpu().numpy())
 
                 sparsities.extend(list((X != 0).int().sum(dim=1).detach().numpy()))
                 X = X.to(device)
