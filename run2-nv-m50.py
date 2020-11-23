@@ -34,7 +34,7 @@ will be approximately one hour (400 epochs).
 
 """
 
-model_dir = 'res/models/'
+model_dir = 'res/models-nv/'
 
 # Default settings for reproducing our experiments.
 m = 50  # measurements
