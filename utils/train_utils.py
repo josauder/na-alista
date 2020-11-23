@@ -106,7 +106,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     # forward op: P_omega * fft_1d(x)
     # backward op: ifft(P_omega * y)
     overall_length = 1024
-    padding = 200
+    padding = 212
 
     ii = ( overall_length - n)
     P_omega = torch.zeros(n + ii)
