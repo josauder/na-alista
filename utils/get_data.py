@@ -32,6 +32,37 @@ class ComplexVectorDataset(Dataset):
         z = z / torch.sqrt((torch.norm(z[:,:,0],dim=-1)**2 + torch.norm(z[:,:,1],dim=-1)**2).mean())
         self.data = z
 
+
+class ComplexVectorDatasetVersion2(Dataset):
+    """
+    Dataset for creating sparse vectors.
+    """
+    def __init__(self, m, n, s, l):
+        self.m = m
+        self.n = n
+        self.s = s
+        self.l = l
+        self.t = 3.5 #looks more exponential
+        self.reset()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return torch.Tensor(self.data[idx]), torch.Tensor([0.0])
+
+    def reset(self):
+        a = torch.zeros((self.l, self.n, 1))
+        # random choice without resampling behaviour for torch...
+        r = torch.rand_like(a)
+        _, idx = torch.topk(r,k=self.s,dim=1)
+        a.scatter_(1,idx,1.0)
+
+        z = torch.randn(self.l,self.n,2) * torch.exp(-1.0 * self.t / self.n * torch.arange(self.n).float()).unsqueeze(0).unsqueeze(2) # scale variance accordingly
+        z = a * z
+        z = z / torch.sqrt((torch.norm(z[:,:,0],dim=-1)**2 + torch.norm(z[:,:,1],dim=-1)**2).mean())
+        self.data = z
+
 class BernoulliSyntheticDataset(Dataset):
     """
     Dataset for creating sparse vectors.

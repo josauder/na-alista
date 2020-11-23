@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 import os
 import pandas as pd
-from utils.get_data import Synthetic, ComplexVectorDataset
+from utils.get_data import Synthetic, ComplexVectorDataset, ComplexVectorDatasetVersion2
 from utils.algorithms import ISTA, FISTA
 from time import time
 import utils.conf as conf
@@ -84,7 +84,7 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
 
 
 def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, model_dir='res/models/',
-                matrix_dir='res/matrices/'):
+                matrix_dir='res/matrices/',new_version=False):
     if not os.path.exists(model_dir + name):
         os.makedirs(model_dir + name)
 
@@ -99,7 +99,11 @@ def train_model(m, n, s, k, p, model_fn, noise_fn, epochs, initial_lr, name, mod
     L = 1
 
     ## ours
-    data = Synthetic(m, n, s, s, dataset=ComplexVectorDataset)
+    if new_version:
+        dset = ComplexVectorDatasetVersion2
+    else:
+        dset = ComplexVectorDataset
+    data = Synthetic(m, n, s, s, dataset=dset)
     train_loader = data.train_loader
     test_loader = data.test_loader
 
