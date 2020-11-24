@@ -1,0 +1,30 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2019 NVIDIA Corporation
+Built on Fri_Feb__8_19:08:17_PST_2019
+Cuda compilation tools, release 10.1, V10.1.105
+Modules loaded
+Python 3.7.1
+
+/beegfs/home/users/f/freya.behrens.1/.pyenv/versions/3.7.1/lib/python37.zip
+/beegfs/home/users/f/freya.behrens.1/.pyenv/versions/3.7.1/lib/python3.7
+/beegfs/home/users/f/freya.behrens.1/.pyenv/versions/3.7.1/lib/python3.7/lib-dynload
+/home/users/f/freya.behrens.1/virtualenv2/lib/python3.7/site-packages
+
+/beegfs/home/cluster/python/3.7.1/lib/python37.zip
+/beegfs/home/cluster/python/3.7.1/lib/python3.7
+/beegfs/home/cluster/python/3.7.1/lib/python3.7/lib-dynload
+/home/users/f/freya.behrens.1/.local/lib/python3.7/site-packages
+/beegfs/home/cluster/python/3.7.1/lib/python3.7/site-packages
+/beegfs/home/users/f/freya.behrens.1/.pyenv/versions/3.7.1/lib/python37.zip
+/beegfs/home/users/f/freya.behrens.1/.pyenv/versions/3.7.1/lib/python3.7
+/beegfs/home/users/f/freya.behrens.1/.pyenv/versions/3.7.1/lib/python3.7/lib-dynload
+/home/users/f/freya.behrens.1/virtualenv2/lib/python3.7/site-packages
+True
+/beegfs/home/cluster/python/3.7.1/lib/python3.7/site-packages/matplotlib/pyplot.py:514: RuntimeWarning: More than 20 figures have been opened. Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory. (To control this warning, see the rcParam `figure.max_open_warning`).
+  max_open_warning, RuntimeWarning)
+/var/tmp/slurmd_spool/job18751896/slurm_script: line 35: 33817 Killed                  python -u /home/users/f/freya.behrens.1/johnnyboy/na-alista/run.py > run.log
+Script run
+slurmstepd: error: Detected 1 oom-kill event(s) in step 18751896.batch cgroup.
